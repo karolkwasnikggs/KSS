@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Release Timeline</title>
+  <link href="https://fonts.googleapis.com/css?family=Chivo:300,300i,400,400i,700,700i,900,900i|Saira+Extra+Condensed:100,200,300,400,500,600,700,800|Saira:100,200,300,400,500,600,700,800" rel="stylesheet">
+  <style>
+    body {
+      background: #252827;
+      font-size: 16px;
+      font-family: 'Chivo', sans-serif;
+      color: white;
+      padding: 40px;
+    }
+
+    h1 {
+      font-family: 'Saira', sans-serif;
+      letter-spacing: 1.5px;
+      color: white;
+      font-weight: 400;
+      font-size: 2.4em;
+      text-align: center;
+    }
+
+    #timeline-content {
+      margin-top: 50px;
+      text-align: center;
+    }
+
+    ul.timeline {
+      border-left: 4px solid #004ffc;
+      border-bottom-right-radius: 4px;
+      border-top-right-radius: 4px;
+      background: rgba(255, 255, 255, 0.03);
+      color: rgba(255, 255, 255, 0.8);
+      font-family: 'Chivo', sans-serif;
+      margin: 50px auto;
+      letter-spacing: 0.5px;
+      position: relative;
+      line-height: 1.4em;
+      font-size: 1.03em;
+      padding: 50px;
+      list-style: none;
+      text-align: left;
+      font-weight: 100;
+      max-width: 30%;
+    }
+
+    ul.timeline h3 {
+      font-family: 'Saira', sans-serif;
+      letter-spacing: 1.5px;
+      font-weight: 400;
+      font-size: 1.4em;
+    }
+
+    .timeline .event {
+      border-bottom: 1px dashed rgba(255,255,255,0.1);
+      padding-bottom: 25px;
+      margin-bottom: 50px;
+      position: relative;
+    }
+
+    .timeline .event:last-of-type {
+      padding-bottom: 0;
+      margin-bottom: 0;
+      border: none;
+    }
+
+    .timeline .event::before,
+    .timeline .event::after {
+      position: absolute;
+      display: block;
+      top: 0;
+    }
+
+    .timeline .event::before {
+      left: -230px;
+      color: rgba(255,255,255,0.4);
+      content: attr(data-date);
+      text-align: right;
+      font-weight: 100;
+      font-size: 0.9em;
+      min-width: 120px;
+      font-family: 'Saira', sans-serif;
+    }
+
+    .timeline .event::after {
+      box-shadow: 0 0 0 4px rgba(0,79,252,1);
+      left: -57px;
+      background: #2e2f2f;
+      border-radius: 50%;
+      height: 11px;
+      width: 11px;
+      content: "";
+      top: 5px;
+    }
+
+    .timeline .event p {
+      margin-top: 8px;
+      color: #ccc;
+      font-weight: 300;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="timeline-content">
+    <h1>QA & PROD Timeline</h1>
+    <ul class="timeline" id="timeline"></ul>
+  </div>
+
+  <script>
+    async function renderTimeline() {
+      const res = await fetch('https://raw.githubusercontent.com/karolkwasnikggs/KSS/main/.releases/releases.json');
+      const data = await res.json();
+      const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
+
+      const timeline = document.getElementById("timeline");
+
+      sorted.forEach(entry => {
+        const li = document.createElement("li");
+        li.className = "event";
+        li.setAttribute("data-date", entry.tag);
+
+        const h3 = document.createElement("h3");
+        h3.textContent = `${entry.type.toUpperCase()} Release`;
+
+        const p = document.createElement("p");
+        p.textContent = entry.content || "(empty)";
+
+        li.appendChild(h3);
+        li.appendChild(p);
+        timeline.appendChild(li);
+      });
+    }
+
+    renderTimeline();
+  </script>
+</body>
+</html>
