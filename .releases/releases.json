@@ -1,2 +1,8 @@
 [
+  {
+    "tag": "qa-20250605",
+    "type": "qa",
+    "timestamp": 20250605,
+    "content": "schema/functions/get_full_name.sql\nschema/tables/orders.sql"
+  }
 ]
