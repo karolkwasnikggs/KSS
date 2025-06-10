@@ -1,0 +1,225 @@
+name: build-release-sql-and-json
+
+on:
+  push:
+    tags:
+      - 'qa-*'
+      - 'prod-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Identify current and previous tag
+        id: taginfo
+        run: |
+          CUR_TAG="${GITHUB_REF#refs/tags/}"
+          echo "CURRENT_TAG=$CUR_TAG" >> $GITHUB_ENV
+
+          PREFIX=$(echo "$CUR_TAG" | cut -d'-' -f1)
+          echo "PREFIX=$PREFIX" >> $GITHUB_ENV
+
+          PREV_TAG=$(git tag --list "${PREFIX}-*" | sort | grep -v "$CUR_TAG" | tail -1)
+          echo "PREVIOUS_TAG=$PREV_TAG" >> $GITHUB_ENV
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "FIRST_RELEASE=true" >> $GITHUB_ENV
+          else
+            echo "FIRST_RELEASE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Build release SQL file
+        run: |
+          mkdir -p releases
+          CUR_TAG="${GITHUB_REF#refs/tags/}"
+          OUTFILE="releases/${CUR_TAG}.sql"
+          PREFIX=$(echo "$CUR_TAG" | cut -d'-' -f1)
+
+          echo "/********************************************/" > "$OUTFILE"
+          echo "-- AUTO RELEASE: ${CUR_TAG}" >> "$OUTFILE"
+          echo "/********************************************/" >> "$OUTFILE"
+          echo "" >> "$OUTFILE"
+
+          if [[ "$PREFIX" == "qa" ]]; then
+            echo "----------------------------------------------" >> "$OUTFILE"
+            echo "-- SECTION: MIGRATIONS (changes/)" >> "$OUTFILE"
+            echo "----------------------------------------------" >> "$OUTFILE"
+
+            mkdir -p .releases/qa
+
+            if [ "$FIRST_RELEASE" = "false" ]; then
+              CHANGED_FILES=$(git diff --name-only --diff-filter=AM "$PREVIOUS_TAG"...HEAD -- 'changes/*.sql' 'schema/*.sql' || true)
+            else
+              CHANGED_FILES=$(find changes -type f -name "*.sql"; find schema -type f -name "*.sql" || true)
+            fi
+
+            > ".releases/qa/${CUR_TAG}.txt"
+            for f in $CHANGED_FILES; do
+              echo "$f" >> ".releases/qa/${CUR_TAG}.txt"
+              if [[ "$f" == changes/* && -f "$f" ]]; then
+                echo "-- FILE: $f" >> "$OUTFILE"
+                cat "$f" >> "$OUTFILE"
+                echo -e "\n\n" >> "$OUTFILE"
+              fi
+            done
+
+            echo "----------------------------------------------" >> "$OUTFILE"
+            echo "-- SECTION: SCHEMA (FULL if first release)" >> "$OUTFILE"
+            echo "----------------------------------------------" >> "$OUTFILE"
+
+            if [ "$FIRST_RELEASE" = "true" ]; then
+              for f in $(find schema -type f -name "*.sql" || true); do
+                echo "-- SCHEMA OBJECT: $f" >> "$OUTFILE"
+                cat "$f" >> "$OUTFILE"
+                echo -e "\n\n" >> "$OUTFILE"
+              done
+            else
+              FILES_IN_SCHEMA=$(find schema -type f -name "*.sql" || true)
+              for f in $FILES_IN_SCHEMA; do
+                STATUS=$(git diff --name-status "$PREVIOUS_TAG"...HEAD -- "$f" | cut -f1)
+                if [[ "$STATUS" == "A" || "$STATUS" == "M" ]]; then
+                  echo "$f" >> ".releases/qa/${CUR_TAG}.txt"
+                fi
+                if [[ "$STATUS" == "A" && -f "$f" ]]; then
+                  echo "-- NEW OBJECT: $f" >> "$OUTFILE"
+                  cat "$f" >> "$OUTFILE"
+                  echo -e "\n\n" >> "$OUTFILE"
+                elif [[ "$STATUS" == "M" && -f "$f" ]]; then
+                  echo "-- MODIFIED OBJECT: $f" >> "$OUTFILE"
+                  echo "-- BEGIN DIFF --------------------------------" >> "$OUTFILE"
+                  git diff "$PREVIOUS_TAG"...HEAD -- "$f" | sed 's/^/-- /' >> "$OUTFILE"
+                  echo "-- END DIFF ----------------------------------" >> "$OUTFILE"
+                  echo -e "\n\n" >> "$OUTFILE"
+                fi
+              done
+            fi
+
+          elif [[ "$PREFIX" == "prod" ]]; then
+            echo "----------------------------------------------" >> "$OUTFILE"
+            echo "-- SECTION: MIGRATIONS (from QA releases)" >> "$OUTFILE"
+            echo "----------------------------------------------" >> "$OUTFILE"
+
+            mkdir -p .releases/prod
+            PREV_PROD=$(git tag --list 'prod-*' | sort | grep -v "$CUR_TAG" | tail -1)
+            TEMP_LIST=".temp_qa_files.txt"
+            > "$TEMP_LIST"
+
+            for qa_file in $(ls .releases/qa/*.txt 2>/dev/null | sort); do
+              QA_TAG=$(basename "$qa_file" .txt)
+              QA_COMMIT=$(git rev-list -n 1 "$QA_TAG")
+              if [ -n "$PREV_PROD" ]; then
+                PREV_PROD_COMMIT=$(git rev-list -n 1 "$PREV_PROD")
+                if git merge-base --is-ancestor "$QA_COMMIT" "$PREV_PROD_COMMIT"; then
+                  continue
+                fi
+              fi
+              cat "$qa_file" >> "$TEMP_LIST"
+            done
+
+            sort -u "$TEMP_LIST" > "$TEMP_LIST.uniq"
+            cp "$TEMP_LIST.uniq" ".releases/prod/${CUR_TAG}.txt"
+
+            while read -r f; do
+              if [[ "$f" == changes/* && -f "$f" ]]; then
+                echo "-- FILE: $f" >> "$OUTFILE"
+                cat "$f" >> "$OUTFILE"
+                echo -e "\n\n" >> "$OUTFILE"
+              fi
+            done < "$TEMP_LIST.uniq"
+
+            echo "----------------------------------------------" >> "$OUTFILE"
+            echo "-- SECTION: SCHEMA (from QA releases)" >> "$OUTFILE"
+            echo "----------------------------------------------" >> "$OUTFILE"
+
+            if [ -n "$PREV_PROD" ]; then
+              PREV_PROD_COMMIT=$(git rev-list -n 1 "$PREV_PROD")
+            else
+              PREV_PROD_COMMIT=""
+            fi
+
+            while read -r f; do
+              if [[ "$f" == schema/* && -f "$f" ]]; then
+                STATUS=$(git diff --name-status "$PREV_PROD_COMMIT"...HEAD -- "$f" | cut -f1)
+                if [[ "$STATUS" == "A" ]]; then
+                  echo "-- NEW OBJECT: $f" >> "$OUTFILE"
+                  cat "$f" >> "$OUTFILE"
+                  echo -e "\n\n" >> "$OUTFILE"
+                elif [[ "$STATUS" == "M" ]]; then
+                  echo "-- MODIFIED OBJECT: $f" >> "$OUTFILE"
+                  echo "-- BEGIN DIFF --------------------------------" >> "$OUTFILE"
+                  git diff "$PREV_PROD_COMMIT"...HEAD -- "$f" | sed 's/^/-- /' >> "$OUTFILE"
+                  echo "-- END DIFF ----------------------------------" >> "$OUTFILE"
+                  echo -e "\n\n" >> "$OUTFILE"
+                fi
+              fi
+            done < "$TEMP_LIST.uniq"
+          fi
+
+      - name: Commit QA file list if needed
+        if: env.PREFIX == 'qa'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "save QA release file list: ${{ env.CURRENT_TAG }}"
+          file_pattern: ".releases/qa/*.txt"
+          branch: main
+
+      - name: Commit PROD file list if needed
+        if: env.PREFIX == 'prod'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "save PROD release file list: ${{ env.CURRENT_TAG }}"
+          file_pattern: ".releases/prod/*.txt"
+          branch: main
+
+      - name: Commit release file to main
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "auto release ${{ env.CURRENT_TAG }}"
+          file_pattern: "releases/*.sql"
+          branch: main
+
+  generate_json:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sleep for 10s
+        run: sleep 10
+
+      - name: Create .releases/releases.json
+        run: |
+          mkdir -p .releases
+          echo "[" > .releases/releases.json
+
+          for folder in qa prod; do
+            for f in .releases/$folder/*.txt; do
+              [ -f "$f" ] || continue
+              tag=$(basename "$f" .txt)
+              timestamp=$(echo "$tag" | grep -o '[0-9]\+')
+              content=$(sed ':a;N;$!ba;s/\n/\\n/g' "$f" | sed 's/"/\\"/g')
+              echo "  {" >> .releases/releases.json
+              echo "    \"tag\": \"$tag\"," >> .releases/releases.json
+              echo "    \"type\": \"$folder\"," >> .releases/releases.json
+              echo "    \"timestamp\": $timestamp," >> .releases/releases.json
+              echo "    \"content\": \"$content\"" >> .releases/releases.json
+              echo "  }," >> .releases/releases.json
+            done
+          done
+
+          sed -i '$ s/},/}/' .releases/releases.json
+          echo "]" >> .releases/releases.json
+
+      - name: Commit releases.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "update releases.json"
+          file_pattern: ".releases/releases.json"
+          branch: main
