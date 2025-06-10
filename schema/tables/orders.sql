@@ -3,5 +3,6 @@ CREATE TABLE orders (
     customer_name VARCHAR2(100) NOT NULL,
     order_date    DATE DEFAULT SYSDATE,
     total_amount  NUMBER(10, 2) DEFAULT 0,
-    delivery_date DATE
+    delivery_date DATE,
+    order_status  VARCHAR2(100) NOT NULL
 );
