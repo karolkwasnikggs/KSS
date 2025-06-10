@@ -1,0 +1,1 @@
+ALTER TABLE orders ADD COLUMN description VARCHAR2(50);
