@@ -1,0 +1,4 @@
+changes/20250604_orders_add_date.sql
+schema/functions/calculate_discount.sql
+schema/functions/get_full_name.sql
+schema/tables/orders.sql
