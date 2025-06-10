@@ -18,6 +18,12 @@
     "content": "changes/20250604_orders_rename_status.sql\nschema/procedures/insert_order.sql\nschema/tables/orders.sql\nschema/procedures/insert_order.sql\nschema/tables/orders.sql"
   },
   {
+    "tag": "qa-20250608",
+    "type": "qa",
+    "timestamp": 20250608,
+    "content": "schema/functions/calculate_discount.sql\nschema/functions/calculate_discount.sql"
+  },
+  {
     "tag": "prod-20250607",
     "type": "prod",
     "timestamp": 20250607,
