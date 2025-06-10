@@ -1,0 +1,5 @@
+changes/20250604_orders_rename_status.sql
+schema/procedures/insert_order.sql
+schema/tables/orders.sql
+schema/procedures/insert_order.sql
+schema/tables/orders.sql
