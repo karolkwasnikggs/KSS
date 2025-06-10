@@ -8,7 +8,7 @@ BEGIN
     ELSIF p_amount >= 500 THEN
         v_discount := 0.10; -- 10%
     ELSE
-        v_discount := 0.05; -- 5%
+        v_discount := 0.07; -- 7%
     END IF;
     RETURN v_discount;
 END;
