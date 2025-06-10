@@ -4,5 +4,11 @@
     "type": "qa",
     "timestamp": 20250605,
     "content": "schema/functions/get_full_name.sql\nschema/tables/orders.sql"
+  },
+  {
+    "tag": "qa-20250606",
+    "type": "qa",
+    "timestamp": 20250606,
+    "content": "changes/20250604_orders_add_date.sql\nschema/functions/calculate_discount.sql\nschema/tables/orders.sql\nschema/functions/calculate_discount.sql\nschema/tables/orders.sql"
   }
 ]
